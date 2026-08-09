@@ -271,6 +271,24 @@
     border-color: var(--turf);
     color: var(--turf);
   }
+  .scope-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .scope-tabs button {
+    flex: 1;
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--dim);
+    padding: 7px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+  .scope-tabs button.active {
+    border-color: var(--blue);
+    color: var(--blue);
+  }
   .view { display: none; }
   .view.active { display: block; }
 </style>
@@ -298,8 +316,14 @@
 
 <div id="viewLeague" class="view">
   <div class="search">
+    <div class="scope-tabs">
+      <button id="scopeRegion" class="active" onclick="setScope('region')">Region</button>
+      <button id="scopeCountry" onclick="setScope('country')">Land</button>
+      <button id="scopeWorld" onclick="setScope('world')">Värld</button>
+    </div>
     <input id="lq" type="text" placeholder="Region, t.ex. Göteborg" autocomplete="off" autocapitalize="off" list="regionList">
     <datalist id="regionList"></datalist>
+    <datalist id="countryList"></datalist>
     <button id="lgo">Sök liga</button>
   </div>
   <main id="leagueResult"></main>
@@ -353,7 +377,9 @@ async function search() {
       result.innerHTML += '<div class="note">Spelare 2 hittades inte.</div>';
       saveLastSearch(n1, '');
     } else if (userB) {
-      renderCompare(userA, userB);
+      result.innerHTML = '<div class="msg">Hämtar placeringar...</div>';
+      const [placesA, placesB] = await getScopePlaces(userA, userB);
+      renderCompare(userA, userB, placesA, placesB);
       saveLastSearch(n1, n2);
     } else {
       render(userA);
@@ -366,6 +392,41 @@ async function search() {
   }
 }
 
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function fetchTop(body) {
+  const opts = body
+    ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+    : {};
+  const res = await fetch('https://api.turfgame.com/v5/users/top', opts);
+  if (!res.ok) throw new Error('API-fel');
+  return res.json();
+}
+
+function findPlace(list, name) {
+  const hit = list.find(u => u.name.toLowerCase() === name.toLowerCase());
+  return hit ? hit.place : null;
+}
+
+// Hämtar land- och världsplacering för två spelare i tur och ordning
+// (API:et tillåter bara 1 anrop/sekund).
+async function getScopePlaces(a, b) {
+  try {
+    const countryA = await fetchTop({ country: a.country, from: 1, to: 50 });
+    await sleep(1100);
+    const countryB = await fetchTop({ country: b.country, from: 1, to: 50 });
+    await sleep(1100);
+    const world = await fetchTop();
+
+    return [
+      { country: findPlace(countryA, a.name), world: findPlace(world, a.name) },
+      { country: findPlace(countryB, b.name), world: findPlace(world, b.name) },
+    ];
+  } catch (e) {
+    return [{ country: null, world: null }, { country: null, world: null }];
+  }
+}
+
 function render(u) {
   const medals = u.medals || [];
 
@@ -373,7 +434,7 @@ function render(u) {
     <div class="card">
       <div class="card-top">
         <div class="name">${escapeHtml(u.name)}</div>
-        <div class="rank-wrap"><div class="rank">${u.place ? '#' + fmt(u.place) : '–'}</div><div class="rank-label">i regionen</div></div>
+        <div class="rank-wrap"><div class="rank">${u.place ? fmt(u.place) : '–'}</div><div class="rank-label">Placering</div></div>
       </div>
       <div class="region">${u.region?.name ? `<span class="region-link" onclick="loadLeague('${escapeHtml(u.region.name)}', ['${escapeHtml(u.name)}'])">${escapeHtml(u.region.name)}</span>` : ''}${u.country ? ', ' + u.country.toUpperCase() : ''}</div>
       <div class="grid">
@@ -401,7 +462,24 @@ const STAT_FIELDS = [
   ['uniqueZonesTaken', 'Unika zoner'],
 ];
 
-function renderCompare(a, b) {
+function placementRow(label, va, vb) {
+  const hasA = va !== null && va !== undefined;
+  const hasB = vb !== null && vb !== undefined;
+  if (!hasA && !hasB) return '';
+  const aLead = hasA && (!hasB || va < vb) ? 'lead' : '';
+  const bLead = hasB && (!hasA || vb < va) ? 'lead' : '';
+  return `
+    <div class="crow">
+      <div class="l">${label}</div>
+      <div class="vals">
+        <span class="a ${aLead}">${hasA ? fmt(va) : ''}</span>
+        <span class="b ${bLead}">${hasB ? fmt(vb) : ''}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderCompare(a, b, placesA, placesB) {
   const rows = STAT_FIELDS.map(([key, label]) => {
     const va = a[key] ?? 0;
     const vb = b[key] ?? 0;
@@ -446,21 +524,27 @@ function renderCompare(a, b) {
     </div>
   `;
 
+  const placementRows = (placesA && placesB)
+    ? placementRow('Placering, land', placesA.country, placesB.country) +
+      placementRow('Placering, världen', placesA.world, placesB.world)
+    : '';
+
   result.innerHTML = `
     <div class="card">
       <div class="vs-head">
         <div class="who a">
           <div class="n">${escapeHtml(a.name)}</div>
-          <div class="r">${a.place ? '#' + fmt(a.place) + ' i regionen' : ''} · ${a.region?.name ? `<span class="region-link" onclick="loadLeague('${escapeHtml(a.region.name)}', ['${escapeHtml(a.name)}', '${escapeHtml(b.name)}'])">${escapeHtml(a.region.name)}</span>` : ''}</div>
+          <div class="r">${a.place ? fmt(a.place) : ''} · ${a.region?.name ? `<span class="region-link" onclick="loadLeague('${escapeHtml(a.region.name)}', ['${escapeHtml(a.name)}', '${escapeHtml(b.name)}'])">${escapeHtml(a.region.name)}</span>` : ''}</div>
         </div>
         <div class="divider">vs</div>
         <div class="who b">
           <div class="n">${escapeHtml(b.name)}</div>
-          <div class="r">${b.place ? '#' + fmt(b.place) + ' i regionen' : ''} · ${b.region?.name ? `<span class="region-link" onclick="loadLeague('${escapeHtml(b.region.name)}', ['${escapeHtml(a.name)}', '${escapeHtml(b.name)}'])">${escapeHtml(b.region.name)}</span>` : ''}</div>
+          <div class="r">${b.place ? fmt(b.place) : ''} · ${b.region?.name ? `<span class="region-link" onclick="loadLeague('${escapeHtml(b.region.name)}', ['${escapeHtml(a.name)}', '${escapeHtml(b.name)}'])">${escapeHtml(b.region.name)}</span>` : ''}</div>
         </div>
       </div>
       ${rows}
       ${medalRow}
+      ${placementRows}
     </div>
   `;
 }
@@ -479,9 +563,29 @@ const LEAGUE_COLS = [
   ['uniqueZonesTaken', 'Unika'],
 ];
 
+const COUNTRY_NAMES = {
+  se: 'Sverige', no: 'Norge', dk: 'Danmark', fi: 'Finland',
+  de: 'Tyskland', nl: 'Nederländerna', gb: 'Storbritannien', us: 'USA',
+  fr: 'Frankrike', es: 'Spanien', pl: 'Polen', be: 'Belgien',
+  ch: 'Schweiz', at: 'Österrike', ie: 'Irland', it: 'Italien'
+};
+
+let leagueScope = 'region';
+
+function setScope(scope) {
+  leagueScope = scope;
+  document.getElementById('scopeRegion').classList.toggle('active', scope === 'region');
+  document.getElementById('scopeCountry').classList.toggle('active', scope === 'country');
+  document.getElementById('scopeWorld').classList.toggle('active', scope === 'world');
+  lq.style.display = scope === 'world' ? 'none' : '';
+  lq.setAttribute('list', scope === 'country' ? 'countryList' : 'regionList');
+  lq.placeholder = scope === 'country' ? 'Land, t.ex. Sverige' : 'Region, t.ex. Göteborg';
+}
+
 let leagueSort = { key: 'place', dir: 1 };
 
 async function loadLeague(regionName, highlightNames) {
+  setScope('region');
   switchTab('league');
   lq.value = regionName;
   leagueResult.innerHTML = '<div class="msg">Hämtar topplista...</div>';
@@ -511,10 +615,55 @@ async function loadLeague(regionName, highlightNames) {
   }
 }
 
-function searchLeague() {
+async function searchLeague() {
+  leagueSort = { key: 'place', dir: 1 };
+
+  if (leagueScope === 'world') {
+    leagueResult.innerHTML = '<div class="msg">Hämtar topplista...</div>';
+    try {
+      const res = await fetch('https://api.turfgame.com/v5/users/top');
+      if (!res.ok) throw new Error('API-fel');
+      const list = await res.json();
+      window._leagueData = list;
+      window._leagueRegion = 'Världen';
+      window._leagueHighlight = [];
+      renderLeague();
+    } catch (e) {
+      leagueResult.innerHTML = '<div class="msg error">Kunde inte hämta topplista. Kolla nätverk eller försök igen.</div>';
+    }
+    return;
+  }
+
   const name = lq.value.trim();
   if (!name) return;
-  loadLeague(name, []);
+
+  if (leagueScope === 'region') {
+    loadLeague(name, []);
+    return;
+  }
+
+  // country
+  const code = Object.keys(COUNTRY_NAMES).find(c => COUNTRY_NAMES[c].toLowerCase() === name.toLowerCase()) || name.toLowerCase();
+  leagueResult.innerHTML = '<div class="msg">Hämtar topplista...</div>';
+  try {
+    const res = await fetch('https://api.turfgame.com/v5/users/top', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ country: code, from: 1, to: 50 })
+    });
+    if (!res.ok) throw new Error('API-fel');
+    const list = await res.json();
+    if (!list.length) {
+      leagueResult.innerHTML = `<div class="msg error">Kunde inte hitta landet "${escapeHtml(name)}".</div>`;
+      return;
+    }
+    window._leagueData = list;
+    window._leagueRegion = COUNTRY_NAMES[code] || name;
+    window._leagueHighlight = [];
+    renderLeague();
+  } catch (e) {
+    leagueResult.innerHTML = '<div class="msg error">Kunde inte hämta topplista. Kolla nätverk eller försök igen.</div>';
+  }
 }
 
 function sortLeague(key) {
@@ -607,6 +756,14 @@ function populateRegionList(regions) {
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name))
     .map(r => `<option value="${escapeHtml(r.name)}">`)
+    .join('');
+
+  const codes = [...new Set(regions.map(r => r.country).filter(Boolean))];
+  const countryList = document.getElementById('countryList');
+  countryList.innerHTML = codes
+    .map(c => COUNTRY_NAMES[c] || c.toUpperCase())
+    .sort((a, b) => a.localeCompare(b))
+    .map(name => `<option value="${escapeHtml(name)}">`)
     .join('');
 }
 
