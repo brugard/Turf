@@ -13,6 +13,8 @@
     --dim: #8b9096;
     --turf: #ff6a1a;
     --turf-dim: #7a3a15;
+    --blue: #4ea8de;
+    --blue-dim: #1f4258;
   }
   * { box-sizing: border-box; }
   body {
@@ -41,10 +43,10 @@
   .search {
     padding: 16px 20px;
     display: flex;
+    flex-direction: column;
     gap: 8px;
   }
   .search input {
-    flex: 1;
     background: var(--panel);
     border: 1px solid var(--line);
     color: var(--text);
@@ -53,7 +55,8 @@
     font-size: 16px;
     outline: none;
   }
-  .search input:focus { border-color: var(--turf); }
+  .search input:nth-of-type(1):focus { border-color: var(--turf); }
+  .search input:nth-of-type(2):focus { border-color: var(--blue); }
   .search button {
     background: var(--turf);
     color: #14171a;
@@ -149,6 +152,78 @@
     min-height: 3px;
   }
   .medal-bars i.has { background: var(--turf); }
+
+  .vs-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 20px;
+  }
+  .vs-head .who { max-width: 44%; }
+  .vs-head .who.a { text-align: left; color: var(--turf); }
+  .vs-head .who.b { text-align: right; color: var(--blue); }
+  .vs-head .who .n { font-size: 17px; font-weight: 700; color: var(--text); }
+  .vs-head .who .r { font-size: 12px; margin-top: 2px; }
+  .vs-head .divider { color: var(--dim); font-size: 12px; }
+
+  .crow { margin-bottom: 16px; }
+  .crow .l {
+    color: var(--dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: center;
+    margin-bottom: 6px;
+  }
+  .crow .vals {
+    display: flex;
+    justify-content: space-between;
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .crow .vals .a { color: var(--dim); }
+  .crow .vals .b { color: var(--dim); }
+  .crow .vals .a.lead { color: var(--turf); }
+  .crow .vals .b.lead { color: var(--blue); }
+  .crow .bar {
+    display: flex;
+    height: 6px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: var(--line);
+  }
+  .crow .bar .a-fill { background: var(--turf-dim); }
+  .crow .bar .a-fill.lead { background: var(--turf); }
+  .crow .bar .b-fill { background: var(--blue-dim); }
+  .crow .bar .b-fill.lead { background: var(--blue); }
+
+  .medals-vs {
+    margin-top: 4px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+  .medals-vs .row { margin-bottom: 12px; }
+  .medals-vs .row .l {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+  .medals-vs .row.a .l { color: var(--turf); }
+  .medals-vs .row.b .l { color: var(--blue); }
+  .medals-vs .bars { display: flex; gap: 3px; align-items: flex-end; height: 24px; }
+  .medals-vs .bars i { flex: 1; border-radius: 2px; min-height: 3px; }
+  .medals-vs .row.a .bars i { background: var(--turf-dim); }
+  .medals-vs .row.a .bars i.has { background: var(--turf); }
+  .medals-vs .row.b .bars i { background: var(--blue-dim); }
+  .medals-vs .row.b .bars i.has { background: var(--blue); }
+  .note {
+    color: var(--dim);
+    font-size: 12px;
+    margin-top: 10px;
+    text-align: center;
+  }
 </style>
 </head>
 <body>
@@ -159,40 +234,54 @@
 </header>
 
 <div class="search">
-  <input id="q" type="text" placeholder="Användarnamn" autocomplete="off" autocapitalize="off">
+  <input id="q1" type="text" placeholder="Spelare 1" autocomplete="off" autocapitalize="off">
+  <input id="q2" type="text" placeholder="Spelare 2 (valfri, för jämförelse)" autocomplete="off" autocapitalize="off">
   <button id="go">Sök</button>
 </div>
 
 <main id="result"></main>
 
 <script>
-const input = document.getElementById('q');
+const q1 = document.getElementById('q1');
+const q2 = document.getElementById('q2');
 const btn = document.getElementById('go');
 const result = document.getElementById('result');
 
 async function search() {
-  const name = input.value.trim();
-  if (!name) return;
+  const n1 = q1.value.trim();
+  const n2 = q2.value.trim();
+  if (!n1) return;
 
   btn.disabled = true;
   result.innerHTML = '<div class="msg">Söker...</div>';
 
   try {
+    const names = n2 ? [n1, n2] : [n1];
     const res = await fetch('https://api.turfgame.com/v5/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify([{ name }])
+      body: JSON.stringify(names.map(name => ({ name })))
     });
 
     if (!res.ok) throw new Error('API-fel');
     const data = await res.json();
 
-    if (!data.length) {
+    const userA = data.find(u => u.name.toLowerCase() === n1.toLowerCase());
+    const userB = n2 ? data.find(u => u.name.toLowerCase() === n2.toLowerCase()) : null;
+
+    if (!userA) {
       result.innerHTML = '<div class="msg error">Ingen turfare hittades med det namnet.</div>';
       return;
     }
 
-    render(data[0]);
+    if (n2 && !userB) {
+      render(userA);
+      result.innerHTML += '<div class="note">Spelare 2 hittades inte.</div>';
+    } else if (userB) {
+      renderCompare(userA, userB);
+    } else {
+      render(userA);
+    }
   } catch (e) {
     result.innerHTML = '<div class="msg error">Kunde inte hämta data. Kolla nätverk eller försök igen.</div>';
   } finally {
@@ -231,6 +320,73 @@ function render(u) {
   `;
 }
 
+const STAT_FIELDS = [
+  ['points', 'Poäng'],
+  ['totalPoints', 'Totalpoäng'],
+  ['pointsPerHour', 'Poäng/h'],
+  ['taken', 'Tagningar'],
+  ['uniqueZonesTaken', 'Unika zoner'],
+];
+
+function renderCompare(a, b) {
+  const rows = STAT_FIELDS.map(([key, label]) => {
+    const va = a[key] ?? 0;
+    const vb = b[key] ?? 0;
+    const total = va + vb || 1;
+    const pa = (va / total) * 100;
+    const pb = 100 - pa;
+    const aLead = va > vb ? 'lead' : '';
+    const bLead = vb > va ? 'lead' : '';
+    return `
+      <div class="crow">
+        <div class="l">${label}</div>
+        <div class="vals">
+          <span class="a ${aLead}">${fmt(va)}</span>
+          <span class="b ${bLead}">${fmt(vb)}</span>
+        </div>
+        <div class="bar">
+          <div class="a-fill ${aLead}" style="width:${pa}%"></div>
+          <div class="b-fill ${bLead}" style="width:${pb}%"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const medalsA = a.medals || [];
+  const medalsB = b.medals || [];
+  const maxMedal = Math.max(1, ...medalsA, ...medalsB);
+  const barsA = medalsA.map(m => `<i class="${m > 0 ? 'has' : ''}" style="height:${m > 0 ? (m / maxMedal) * 100 : 4}%"></i>`).join('');
+  const barsB = medalsB.map(m => `<i class="${m > 0 ? 'has' : ''}" style="height:${m > 0 ? (m / maxMedal) * 100 : 4}%"></i>`).join('');
+
+  result.innerHTML = `
+    <div class="card">
+      <div class="vs-head">
+        <div class="who a">
+          <div class="n">${escapeHtml(a.name)}</div>
+          <div class="r">#${a.rank ?? '–'} · ${escapeHtml(a.region?.name || '')}</div>
+        </div>
+        <div class="divider">vs</div>
+        <div class="who b">
+          <div class="n">${escapeHtml(b.name)}</div>
+          <div class="r">#${b.rank ?? '–'} · ${escapeHtml(b.region?.name || '')}</div>
+        </div>
+      </div>
+      ${rows}
+      ${medalsA.length || medalsB.length ? `
+      <div class="medals-vs">
+        <div class="row a">
+          <div class="l">${escapeHtml(a.name)} (${medalsA.filter(m => m > 0).length}/${medalsA.length})</div>
+          <div class="bars">${barsA}</div>
+        </div>
+        <div class="row b">
+          <div class="l">${escapeHtml(b.name)} (${medalsB.filter(m => m > 0).length}/${medalsB.length})</div>
+          <div class="bars">${barsB}</div>
+        </div>
+      </div>` : ''}
+    </div>
+  `;
+}
+
 function fmt(n) {
   if (n === undefined || n === null) return '–';
   return n.toLocaleString('sv-SE');
@@ -243,7 +399,8 @@ function escapeHtml(s) {
 }
 
 btn.addEventListener('click', search);
-input.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+q1.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+q2.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
 </script>
 
 </body>
