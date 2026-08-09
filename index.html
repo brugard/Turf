@@ -96,10 +96,18 @@
     font-size: 20px;
     font-weight: 700;
   }
+  .card-top .rank-wrap { text-align: right; }
   .card-top .rank {
     color: var(--turf);
     font-weight: 700;
     font-size: 15px;
+    line-height: 1.2;
+  }
+  .card-top .rank-label {
+    color: var(--dim);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
   .region {
     color: var(--dim);
@@ -365,7 +373,7 @@ function render(u) {
     <div class="card">
       <div class="card-top">
         <div class="name">${escapeHtml(u.name)}</div>
-        <div class="rank">#${u.rank ?? '–'}</div>
+        <div class="rank-wrap"><div class="rank">${u.place ? '#' + fmt(u.place) : '–'}</div><div class="rank-label">i regionen</div></div>
       </div>
       <div class="region">${u.region?.name ? `<span class="region-link" onclick="loadLeague('${escapeHtml(u.region.name)}', ['${escapeHtml(u.name)}'])">${escapeHtml(u.region.name)}</span>` : ''}${u.country ? ', ' + u.country.toUpperCase() : ''}</div>
       <div class="grid">
@@ -443,12 +451,12 @@ function renderCompare(a, b) {
       <div class="vs-head">
         <div class="who a">
           <div class="n">${escapeHtml(a.name)}</div>
-          <div class="r">#${a.rank ?? '–'} · ${a.region?.name ? `<span class="region-link" onclick="loadLeague('${escapeHtml(a.region.name)}', ['${escapeHtml(a.name)}', '${escapeHtml(b.name)}'])">${escapeHtml(a.region.name)}</span>` : ''}</div>
+          <div class="r">${a.place ? '#' + fmt(a.place) + ' i regionen' : ''} · ${a.region?.name ? `<span class="region-link" onclick="loadLeague('${escapeHtml(a.region.name)}', ['${escapeHtml(a.name)}', '${escapeHtml(b.name)}'])">${escapeHtml(a.region.name)}</span>` : ''}</div>
         </div>
         <div class="divider">vs</div>
         <div class="who b">
           <div class="n">${escapeHtml(b.name)}</div>
-          <div class="r">#${b.rank ?? '–'} · ${b.region?.name ? `<span class="region-link" onclick="loadLeague('${escapeHtml(b.region.name)}', ['${escapeHtml(a.name)}', '${escapeHtml(b.name)}'])">${escapeHtml(b.region.name)}</span>` : ''}</div>
+          <div class="r">${b.place ? '#' + fmt(b.place) + ' i regionen' : ''} · ${b.region?.name ? `<span class="region-link" onclick="loadLeague('${escapeHtml(b.region.name)}', ['${escapeHtml(a.name)}', '${escapeHtml(b.name)}'])">${escapeHtml(b.region.name)}</span>` : ''}</div>
         </div>
       </div>
       ${rows}
