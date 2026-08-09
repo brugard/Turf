@@ -587,12 +587,11 @@ const LEAGUE_COLS = [
   ['uniqueZonesTaken', 'Unika'],
 ];
 
-const COUNTRY_NAMES = {
-  se: 'Sverige', no: 'Norge', dk: 'Danmark', fi: 'Finland',
-  de: 'Tyskland', nl: 'Nederländerna', gb: 'Storbritannien', us: 'USA',
-  fr: 'Frankrike', es: 'Spanien', pl: 'Polen', be: 'Belgien',
-  ch: 'Schweiz', at: 'Österrike', ie: 'Irland', it: 'Italien'
-};
+const countryDisplay = new Intl.DisplayNames(['sv'], { type: 'region' });
+function countryName(code) {
+  try { return countryDisplay.of(code.toUpperCase()) || code.toUpperCase(); }
+  catch (e) { return code.toUpperCase(); }
+}
 
 let leagueScope = 'region';
 
@@ -603,6 +602,8 @@ function setScope(scope) {
   document.getElementById('scopeWorld').classList.toggle('active', scope === 'world');
   lq.style.display = scope === 'world' ? 'none' : '';
   lq.placeholder = scope === 'country' ? 'Land, t.ex. Sverige' : 'Region, t.ex. Göteborg';
+  window._leagueData = null;
+  leagueResult.innerHTML = '';
 }
 
 let leagueSort = { key: 'place', dir: 1 };
@@ -666,7 +667,8 @@ async function searchLeague() {
   }
 
   // country
-  const code = Object.keys(COUNTRY_NAMES).find(c => COUNTRY_NAMES[c].toLowerCase() === name.toLowerCase()) || name.toLowerCase();
+  const codes = [...new Set((window._allRegions || []).map(r => r.country).filter(Boolean))];
+  const code = codes.find(c => countryName(c).toLowerCase() === name.toLowerCase()) || name.toLowerCase();
   leagueResult.innerHTML = '<div class="msg">Hämtar topplista...</div>';
   try {
     const res = await fetch('https://api.turfgame.com/v5/users/top', {
@@ -681,7 +683,7 @@ async function searchLeague() {
       return;
     }
     window._leagueData = list;
-    window._leagueRegion = COUNTRY_NAMES[code] || name;
+    window._leagueRegion = countryName(code);
     window._leagueHighlight = [];
     renderLeague();
   } catch (e) {
@@ -774,13 +776,16 @@ async function loadRegions() {
 }
 
 function populateRegionList(regions) {
-  window._regionNames = regions
+  const active = regions.filter(r => r.regionLord);
+  window._allRegions = active;
+
+  window._regionNames = active
     .map(r => r.name)
     .sort((a, b) => a.localeCompare(b));
 
-  const codes = [...new Set(regions.map(r => r.country).filter(Boolean))];
+  const codes = [...new Set(active.map(r => r.country).filter(Boolean))];
   window._countryNames = codes
-    .map(c => COUNTRY_NAMES[c] || c.toUpperCase())
+    .map(countryName)
     .sort((a, b) => a.localeCompare(b));
 }
 
