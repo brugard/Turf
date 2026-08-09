@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turf Stats</title>
+<style>
+  :root {
+    --bg: #14171a;
+    --panel: #1d2124;
+    --line: #2a2f33;
+    --text: #e8e6e1;
+    --dim: #8b9096;
+    --turf: #ff6a1a;
+    --turf-dim: #7a3a15;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    padding: 28px 20px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  header h1 span { color: var(--turf); }
+  header p {
+    margin: 4px 0 0;
+    color: var(--dim);
+    font-size: 13px;
+  }
+  .search {
+    padding: 16px 20px;
+    display: flex;
+    gap: 8px;
+  }
+  .search input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 16px;
+    outline: none;
+  }
+  .search input:focus { border-color: var(--turf); }
+  .search button {
+    background: var(--turf);
+    color: #14171a;
+    border: none;
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .search button:disabled { opacity: 0.5; }
+  main {
+    padding: 4px 20px 40px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .msg {
+    color: var(--dim);
+    font-size: 14px;
+    padding: 20px 0;
+    text-align: center;
+  }
+  .msg.error { color: var(--turf); }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+    margin-top: 8px;
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+  }
+  .card-top .name {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .card-top .rank {
+    color: var(--turf);
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .region {
+    color: var(--dim);
+    font-size: 13px;
+    margin-bottom: 18px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .stat {
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat .v {
+    font-size: 19px;
+    font-weight: 700;
+  }
+  .stat .l {
+    color: var(--dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 2px;
+  }
+  .medals {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+  .medals .l {
+    color: var(--dim);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+  }
+  .medal-bars {
+    display: flex;
+    gap: 3px;
+    align-items: flex-end;
+    height: 40px;
+  }
+  .medal-bars i {
+    flex: 1;
+    background: var(--turf-dim);
+    border-radius: 2px;
+    min-height: 3px;
+  }
+  .medal-bars i.has { background: var(--turf); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Turf<span>Stats</span></h1>
+  <p>Sök en turfare för att se dess statistik</p>
+</header>
+
+<div class="search">
+  <input id="q" type="text" placeholder="Användarnamn" autocomplete="off" autocapitalize="off">
+  <button id="go">Sök</button>
+</div>
+
+<main id="result"></main>
+
+<script>
+const input = document.getElementById('q');
+const btn = document.getElementById('go');
+const result = document.getElementById('result');
+
+async function search() {
+  const name = input.value.trim();
+  if (!name) return;
+
+  btn.disabled = true;
+  result.innerHTML = '<div class="msg">Söker...</div>';
+
+  try {
+    const res = await fetch('https://api.turfgame.com/v5/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify([{ name }])
+    });
+
+    if (!res.ok) throw new Error('API-fel');
+    const data = await res.json();
+
+    if (!data.length) {
+      result.innerHTML = '<div class="msg error">Ingen turfare hittades med det namnet.</div>';
+      return;
+    }
+
+    render(data[0]);
+  } catch (e) {
+    result.innerHTML = '<div class="msg error">Kunde inte hämta data. Kolla nätverk eller försök igen.</div>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function render(u) {
+  const medals = u.medals || [];
+  const maxMedal = Math.max(1, ...medals);
+  const bars = medals.map(m =>
+    `<i class="${m > 0 ? 'has' : ''}" style="height:${m > 0 ? (m / maxMedal) * 100 : 4}%"></i>`
+  ).join('');
+
+  result.innerHTML = `
+    <div class="card">
+      <div class="card-top">
+        <div class="name">${escapeHtml(u.name)}</div>
+        <div class="rank">#${u.rank ?? '–'}</div>
+      </div>
+      <div class="region">${escapeHtml(u.region?.name || '')}${u.country ? ', ' + u.country.toUpperCase() : ''}</div>
+      <div class="grid">
+        <div class="stat"><div class="v">${fmt(u.points)}</div><div class="l">Poäng</div></div>
+        <div class="stat"><div class="v">${fmt(u.totalPoints)}</div><div class="l">Totalpoäng</div></div>
+        <div class="stat"><div class="v">${fmt(u.pointsPerHour)}</div><div class="l">Poäng/h</div></div>
+        <div class="stat"><div class="v">${fmt(u.taken)}</div><div class="l">Tagningar</div></div>
+        <div class="stat"><div class="v">${fmt(u.uniqueZonesTaken)}</div><div class="l">Unika zoner</div></div>
+        <div class="stat"><div class="v">${fmt(u.zones?.length)}</div><div class="l">Innehar nu</div></div>
+      </div>
+      ${medals.length ? `
+      <div class="medals">
+        <div class="l">Medaljer (${medals.filter(m => m > 0).length}/${medals.length})</div>
+        <div class="medal-bars">${bars}</div>
+      </div>` : ''}
+    </div>
+  `;
+}
+
+function fmt(n) {
+  if (n === undefined || n === null) return '–';
+  return n.toLocaleString('sv-SE');
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+btn.addEventListener('click', search);
+input.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+</script>
+
+</body>
+</html>
