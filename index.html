@@ -224,28 +224,134 @@
     margin-top: 10px;
     text-align: center;
   }
+
+  .league-btn {
+    display: block;
+    width: 100%;
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--dim);
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 13px;
+    margin-top: 10px;
+  }
+  .league-btn:active { border-color: var(--turf); color: var(--text); }
+
+  .league-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+  .league-head h2 {
+    font-size: 16px;
+    margin: 0;
+  }
+  .league-head .back {
+    color: var(--turf);
+    font-size: 13px;
+    background: none;
+    border: none;
+    padding: 4px 0;
+  }
+  table.league {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  table.league th, table.league td {
+    padding: 8px 4px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  table.league th:first-child, table.league td:first-child { text-align: left; }
+  table.league th:nth-child(2), table.league td:nth-child(2) { text-align: left; }
+  table.league th {
+    color: var(--dim);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+  }
+  table.league tr:not(:last-child) td { border-bottom: 1px solid var(--line); }
+  table.league tr.me { background: rgba(255,106,26,0.12); }
+  table.league tr.me td:first-child { color: var(--turf); font-weight: 700; }
+  .league-wrap { overflow-x: auto; }
+
+  .tabs {
+    display: flex;
+    padding: 16px 20px 0;
+    gap: 8px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .tabs button {
+    flex: 1;
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--dim);
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .tabs button.active {
+    border-color: var(--turf);
+    color: var(--turf);
+  }
+  .view { display: none; }
+  .view.active { display: block; }
 </style>
 </head>
 <body>
 
 <header>
   <h1>Turf<span>Stats</span></h1>
-  <p>Sök en turfare för att se dess statistik</p>
+  <p>Sök en turfare eller en regions topplista</p>
 </header>
 
-<div class="search">
-  <input id="q1" type="text" placeholder="Spelare 1" autocomplete="off" autocapitalize="off">
-  <input id="q2" type="text" placeholder="Spelare 2 (valfri, för jämförelse)" autocomplete="off" autocapitalize="off">
-  <button id="go">Sök</button>
+<div class="tabs">
+  <button id="tabPlayer" class="active" onclick="switchTab('player')">Spelare</button>
+  <button id="tabLeague" onclick="switchTab('league')">Liga</button>
 </div>
 
-<main id="result"></main>
+<div id="viewPlayer" class="view active">
+  <div class="search">
+    <input id="q1" type="text" placeholder="Spelare 1" autocomplete="off" autocapitalize="off">
+    <input id="q2" type="text" placeholder="Spelare 2" autocomplete="off" autocapitalize="off">
+    <button id="go">Sök</button>
+  </div>
+  <main id="result"></main>
+</div>
+
+<div id="viewLeague" class="view">
+  <div class="search">
+    <input id="lq" type="text" placeholder="Region, t.ex. Göteborg" autocomplete="off" autocapitalize="off">
+    <button id="lgo">Sök liga</button>
+  </div>
+  <main id="leagueResult"></main>
+</div>
 
 <script>
 const q1 = document.getElementById('q1');
 const q2 = document.getElementById('q2');
 const btn = document.getElementById('go');
 const result = document.getElementById('result');
+const lq = document.getElementById('lq');
+const lgo = document.getElementById('lgo');
+const leagueResult = document.getElementById('leagueResult');
+
+function switchTab(tab) {
+  document.getElementById('tabPlayer').classList.toggle('active', tab === 'player');
+  document.getElementById('tabLeague').classList.toggle('active', tab === 'league');
+  document.getElementById('viewPlayer').classList.toggle('active', tab === 'player');
+  document.getElementById('viewLeague').classList.toggle('active', tab === 'league');
+}
 
 async function search() {
   const n1 = q1.value.trim();
@@ -306,7 +412,7 @@ function render(u) {
       <div class="grid">
         <div class="stat"><div class="v">${fmt(u.points)}</div><div class="l">Poäng</div></div>
         <div class="stat"><div class="v">${fmt(u.totalPoints)}</div><div class="l">Totalpoäng</div></div>
-        <div class="stat"><div class="v">${fmt(u.pointsPerHour)}</div><div class="l">Poäng/h</div></div>
+        <div class="stat"><div class="v">${fmt(u.pointsPerHour)}</div><div class="l">Poäng/timme</div></div>
         <div class="stat"><div class="v">${fmt(u.taken)}</div><div class="l">Tagningar</div></div>
         <div class="stat"><div class="v">${fmt(u.uniqueZonesTaken)}</div><div class="l">Unika zoner</div></div>
         <div class="stat"><div class="v">${fmt(u.zones?.length)}</div><div class="l">Innehar nu</div></div>
@@ -317,13 +423,14 @@ function render(u) {
         <div class="medal-bars">${bars}</div>
       </div>` : ''}
     </div>
+    ${u.region?.name ? `<button class="league-btn" onclick="loadLeague('${escapeHtml(u.region.name)}', ['${escapeHtml(u.name)}'])">Visa topplista för ${escapeHtml(u.region.name)}</button>` : ''}
   `;
 }
 
 const STAT_FIELDS = [
   ['points', 'Poäng'],
   ['totalPoints', 'Totalpoäng'],
-  ['pointsPerHour', 'Poäng/h'],
+  ['pointsPerHour', 'Poäng/timme'],
   ['taken', 'Tagningar'],
   ['uniqueZonesTaken', 'Unika zoner'],
 ];
@@ -384,12 +491,110 @@ function renderCompare(a, b) {
         </div>
       </div>` : ''}
     </div>
+    ${a.region?.name ? `<button class="league-btn" onclick="loadLeague('${escapeHtml(a.region.name)}', ['${escapeHtml(a.name)}', '${escapeHtml(b.name)}'])">Visa topplista för ${escapeHtml(a.region.name)}</button>` : ''}
   `;
 }
 
 function fmt(n) {
   if (n === undefined || n === null) return '–';
   return n.toLocaleString('sv-SE');
+}
+
+const LEAGUE_COLS = [
+  ['place', 'Plac'],
+  ['name', 'Namn'],
+  ['points', 'Poäng'],
+  ['pointsPerHour', 'P/h'],
+  ['taken', 'Tagn.'],
+  ['uniqueZonesTaken', 'Unika'],
+];
+
+let leagueSort = { key: 'place', dir: 1 };
+
+async function loadLeague(regionName, highlightNames) {
+  switchTab('league');
+  lq.value = regionName;
+  leagueResult.innerHTML = '<div class="msg">Hämtar topplista...</div>';
+  leagueSort = { key: 'place', dir: 1 };
+
+  try {
+    const res = await fetch('https://api.turfgame.com/v5/users/top', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ region: regionName.toLowerCase(), from: 1, to: 50 })
+    });
+
+    if (!res.ok) throw new Error('API-fel');
+    const list = await res.json();
+
+    if (!list.length) {
+      leagueResult.innerHTML = `<div class="msg error">Kunde inte hitta regionen "${escapeHtml(regionName)}".</div>`;
+      return;
+    }
+
+    window._leagueData = list;
+    window._leagueRegion = regionName;
+    window._leagueHighlight = (highlightNames || []).map(n => n.toLowerCase());
+    renderLeague();
+  } catch (e) {
+    leagueResult.innerHTML = '<div class="msg error">Kunde inte hämta topplista. Kolla nätverk eller försök igen.</div>';
+  }
+}
+
+function searchLeague() {
+  const name = lq.value.trim();
+  if (!name) return;
+  loadLeague(name, []);
+}
+
+function sortLeague(key) {
+  if (leagueSort.key === key) {
+    leagueSort.dir *= -1;
+  } else {
+    leagueSort = { key, dir: key === 'name' ? 1 : -1 };
+  }
+  renderLeague();
+}
+
+function renderLeague() {
+  const list = [...window._leagueData];
+  const highlight = window._leagueHighlight || [];
+  const { key, dir } = leagueSort;
+
+  list.sort((x, y) => {
+    const vx = x[key], vy = y[key];
+    if (typeof vx === 'string') return vx.localeCompare(vy) * dir;
+    return ((vx ?? 0) - (vy ?? 0)) * dir;
+  });
+
+  const rows = list.map(u => `
+    <tr class="${highlight.includes((u.name || '').toLowerCase()) ? 'me' : ''}">
+      <td>${fmt(u.place)}</td>
+      <td>${escapeHtml(u.name)}</td>
+      <td>${fmt(u.points)}</td>
+      <td>${fmt(u.pointsPerHour)}</td>
+      <td>${fmt(u.taken)}</td>
+      <td>${fmt(u.uniqueZonesTaken)}</td>
+    </tr>
+  `).join('');
+
+  const headers = LEAGUE_COLS.map(([k, label]) =>
+    `<th onclick="sortLeague('${k}')">${label}${leagueSort.key === k ? (leagueSort.dir === 1 ? ' ▲' : ' ▼') : ''}</th>`
+  ).join('');
+
+  leagueResult.innerHTML = `
+    <div class="card">
+      <div class="league-head">
+        <h2>${escapeHtml(window._leagueRegion)}</h2>
+      </div>
+      <div class="league-wrap">
+        <table class="league">
+          <thead><tr>${headers}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
 }
 
 function escapeHtml(s) {
@@ -401,6 +606,8 @@ function escapeHtml(s) {
 btn.addEventListener('click', search);
 q1.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
 q2.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+lgo.addEventListener('click', searchLeague);
+lq.addEventListener('keydown', e => { if (e.key === 'Enter') searchLeague(); });
 </script>
 
 </body>
