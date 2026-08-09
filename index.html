@@ -291,6 +291,29 @@
   }
   .view { display: none; }
   .view.active { display: block; }
+
+  .autocomplete { position: relative; }
+  .autocomplete-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 10;
+    display: none;
+  }
+  .autocomplete-list.show { display: block; }
+  .autocomplete-list div {
+    padding: 10px 14px;
+    font-size: 15px;
+  }
+  .autocomplete-list div:active,
+  .autocomplete-list div.hl { background: var(--turf-dim); }
 </style>
 </head>
 <body>
@@ -321,9 +344,10 @@
       <button id="scopeCountry" onclick="setScope('country')">Land</button>
       <button id="scopeWorld" onclick="setScope('world')">Värld</button>
     </div>
-    <input id="lq" type="text" placeholder="Region, t.ex. Göteborg" autocomplete="off" autocapitalize="off" list="regionList">
-    <datalist id="regionList"></datalist>
-    <datalist id="countryList"></datalist>
+    <div class="autocomplete">
+      <input id="lq" type="text" placeholder="Region, t.ex. Göteborg" autocomplete="off" autocapitalize="off">
+      <div id="lqList" class="autocomplete-list"></div>
+    </div>
     <button id="lgo">Sök liga</button>
   </div>
   <main id="leagueResult"></main>
@@ -578,7 +602,6 @@ function setScope(scope) {
   document.getElementById('scopeCountry').classList.toggle('active', scope === 'country');
   document.getElementById('scopeWorld').classList.toggle('active', scope === 'world');
   lq.style.display = scope === 'world' ? 'none' : '';
-  lq.setAttribute('list', scope === 'country' ? 'countryList' : 'regionList');
   lq.placeholder = scope === 'country' ? 'Land, t.ex. Sverige' : 'Region, t.ex. Göteborg';
 }
 
@@ -751,21 +774,41 @@ async function loadRegions() {
 }
 
 function populateRegionList(regions) {
-  const list = document.getElementById('regionList');
-  list.innerHTML = regions
-    .slice()
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .map(r => `<option value="${escapeHtml(r.name)}">`)
-    .join('');
+  window._regionNames = regions
+    .map(r => r.name)
+    .sort((a, b) => a.localeCompare(b));
 
   const codes = [...new Set(regions.map(r => r.country).filter(Boolean))];
-  const countryList = document.getElementById('countryList');
-  countryList.innerHTML = codes
+  window._countryNames = codes
     .map(c => COUNTRY_NAMES[c] || c.toUpperCase())
-    .sort((a, b) => a.localeCompare(b))
-    .map(name => `<option value="${escapeHtml(name)}">`)
-    .join('');
+    .sort((a, b) => a.localeCompare(b));
 }
+
+const lqList = document.getElementById('lqList');
+
+function showSuggestions() {
+  const source = leagueScope === 'country' ? (window._countryNames || []) : (window._regionNames || []);
+  const q = lq.value.trim().toLowerCase();
+  const matches = (q ? source.filter(n => n.toLowerCase().includes(q)) : source).slice(0, 8);
+
+  if (!matches.length) {
+    lqList.classList.remove('show');
+    lqList.innerHTML = '';
+    return;
+  }
+
+  lqList.innerHTML = matches.map(n => `<div onmousedown="pickSuggestion('${escapeHtml(n)}')">${escapeHtml(n)}</div>`).join('');
+  lqList.classList.add('show');
+}
+
+function pickSuggestion(name) {
+  lq.value = name;
+  lqList.classList.remove('show');
+}
+
+lq.addEventListener('input', showSuggestions);
+lq.addEventListener('focus', showSuggestions);
+lq.addEventListener('blur', () => setTimeout(() => lqList.classList.remove('show'), 150));
 
 btn.addEventListener('click', search);
 q1.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
